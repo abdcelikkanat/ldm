@@ -1,2 +1,2 @@
-# ldm
-Latent Distance Model
+# Latent Distance Model
+Version 1.0.0
