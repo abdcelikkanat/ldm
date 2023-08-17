@@ -59,7 +59,7 @@ def process(args):
     seed = args.seed
     verbose = args.verbose
 
-    edges = []
+    edges, weights = [], []
     with open(dataset_path, 'r') as f:
         for line in f.readlines():
             tokens = line.strip().split()
@@ -68,8 +68,15 @@ def process(args):
                 temp = v
                 v = u
                 u = temp
+
+            # Add the edge
             edges.append([u, v])
+            # Add the weight
+            if len(tokens) > 2:
+                weights.append(float(tokens[2]))
+
     edges = torch.as_tensor(edges, dtype=torch.int, device=torch.device("cpu")).T
+    weights = torch.as_tensor(weights, dtype=torch.float, device=torch.device("cpu"))
 
     # Run the model
     ldm = LDM(
@@ -80,47 +87,6 @@ def process(args):
     ldm.learn()
     # Save the model
     ldm.save(path=model_path)
-
-    # ####################################################################################################################
-    # test_intervals_num = 8
-    #
-    # # Load sample files
-    # with open(samples_path, 'rb') as f:
-    #     samples_data = pkl.load(f)
-    #     labels = samples_data["test_labels"]
-    #     samples = samples_data["test_samples"]
-    #
-    # file = open(output_path, 'w')
-    #
-    # # Predicted scores
-    # pred_scores = [[] for _ in range(test_intervals_num)]
-    # for b in range(test_intervals_num):
-    #     for sample in samples[b]:
-    #         i, j, t_init, t_last = sample
-    #         score = ldm.get_log_intensity_sum(edges=torch.as_tensor([[i], [j]])).detach().numpy()
-    #         pred_scores[b].append(score)
-    #
-    # for b in range(test_intervals_num):
-    #
-    #     if sum(labels[b]) != len(labels[b]) and sum(labels[b]) != 0:
-    #         roc_auc = roc_auc_score(y_true=labels[b], y_score=pred_scores[b])
-    #         file.write(f"Roc AUC, Bin Id {b}: {roc_auc}\n")
-    #         pr_auc = average_precision_score(y_true=labels[b], y_score=pred_scores[b])
-    #         file.write(f"PR AUC, Bin Id {b}: {pr_auc}\n")
-    #         file.write("\n")
-    #
-    # roc_auc_complete = roc_auc_score(
-    #     y_true=[l for bin_labels in labels for l in bin_labels],
-    #     y_score=[s for bin_scores in pred_scores for s in bin_scores]
-    # )
-    # file.write(f"Roc AUC in total: {roc_auc_complete}\n")
-    # pr_auc_complete = average_precision_score(
-    #     y_true=[l for bin_labels in labels for l in bin_labels],
-    #     y_score=[s for bin_scores in pred_scores for s in bin_scores]
-    # )
-    # file.write(f"PR AUC in total: {pr_auc_complete}\n")
-    #
-    # file.close()
 
 
 if __name__ == "__main__":

@@ -7,11 +7,13 @@ import random
 
 
 class LDM(torch.nn.Module):
-    def __init__(self,  edges, dim, lr=0.1, epoch_num=100, batch_size = 0, spe=1, device=torch.device("cpu"),
-                 verbose=False, seed=0):
+    def __init__(self,  edges, weights=None, dim=2, lr=0.1, epoch_num=100, batch_size = 0, spe=1,
+                 device=torch.device("cpu"), verbose=False, seed=0):
+
         super(LDM, self).__init__()
 
         self.__edges = edges.to(device)
+        self.__weights = torch.ones(self.__edges.shape[1], type=torch.float, device=device) if weights is None else weights.to(device)
         self.__nodes_num = torch.max(self.__edges) + 1
         self.__edges_num = self.__edges.shape[1]
         self.__dim = dim
@@ -54,7 +56,7 @@ class LDM(torch.nn.Module):
 
         return torch.triu(torch.exp(beta_mat - dist_mat), diagonal=1).sum()
 
-    def get_log_intensity_sum(self, edges):
+    def get_log_intensity_sum(self, edges, weights):
 
         beta_pair = torch.index_select(self.__beta, index=edges[0], dim=0) + \
                     torch.index_select(self.__beta, index=edges[1], dim=0)
@@ -64,7 +66,7 @@ class LDM(torch.nn.Module):
             torch.index_select(self.__z, index=edges[1], dim=0),
         )
 
-        return (beta_pair - z_dist).sum()
+        return (weights * (beta_pair - z_dist)).sum()
 
     def get_intensity_for(self, i, j):
 
@@ -72,11 +74,10 @@ class LDM(torch.nn.Module):
         z_dist = self.__pdist(self.__z[i, :], self.__z[j, :])
         return torch.exp(beta_sum - z_dist)
 
-
-    def get_neg_likelihood(self, edges, nodes=None):
+    def get_neg_likelihood(self, edges, weights, nodes=None):
 
         # Compute the link term
-        link_term = self.get_log_intensity_sum(edges=edges)
+        link_term = self.get_log_intensity_sum(edges=edges, weights=weights)
 
         # Compute the non-link term
         non_link = self.get_intensity_sum(nodes=nodes)
@@ -130,29 +131,28 @@ class LDM(torch.nn.Module):
         sampled_nodes = torch.multinomial(self.__sampling_weights, self.__batch_size, replacement=False)
         sampled_nodes, _ = torch.sort(sampled_nodes, dim=0)
 
-        batch_edges, _ = spspmm(
+        batch_edges, batch_weights = spspmm(
             indexA=self.__edges.type(torch.long),
-            valueA=torch.ones(size=(self.__edges_num, ), dtype=torch.int, device=self.__device),
+            valueA=self.__weights,
             indexB=torch.vstack((sampled_nodes, sampled_nodes)).type(torch.long),
-            valueB=torch.ones(size=(self.__batch_size,), dtype=torch.int, device=self.__device),
+            valueB=torch.ones(size=(self.__batch_size,), dtype=torch.float, device=self.__device),
             m=self.__nodes_num, k=self.__nodes_num, n=self.__nodes_num, coalesced=True
         )
 
         # Forward pass
-        average_batch_loss = self.forward(edges=batch_edges, nodes=sampled_nodes)
+        average_batch_loss = self.forward(edges=batch_edges, weights=batch_weights, nodes=sampled_nodes)
 
         return average_batch_loss
 
-    def forward(self, edges, nodes):
+    def forward(self, edges, weights, nodes):
 
-        nll = self.get_neg_likelihood(edges=edges, nodes=nodes)
+        nll = self.get_neg_likelihood(edges=edges, weights=weights, nodes=nodes)
 
         return nll
 
     def get_params(self):
 
         return self.__beta.detach().numpy(), self.__z.detach().numpy()
-
 
     def save(self, path):
 
