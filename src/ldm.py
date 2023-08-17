@@ -13,7 +13,7 @@ class LDM(torch.nn.Module):
         super(LDM, self).__init__()
 
         self.__edges = edges.to(device)
-        self.__weights = torch.ones((self.__edges.shape[1],), type=torch.float, device=device) if weights is None else weights.to(device)
+        self.__weights = torch.ones((self.__edges.shape[1],), dtype=torch.float, device=device) if weights is None else weights.to(device)
         self.__nodes_num = torch.max(self.__edges) + 1
         self.__edges_num = self.__edges.shape[1]
         self.__dim = dim
